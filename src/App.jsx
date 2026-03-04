@@ -668,6 +668,25 @@ export default function TradingJournal() {
   const [filterInstrument, setFilterInstrument] = useState("ALL");
   const [filterSetup, setFilterSetup] = useState("ALL");
   const [selectedTrade, setSelectedTrade] = useState(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [datePreset, setDatePreset] = useState("ALL");
+
+  function applyPreset(preset) {
+    setDatePreset(preset);
+    const today = new Date();
+    const fmt = d => d.toISOString().split("T")[0];
+    if (preset === "TODAY") { setDateFrom(fmt(today)); setDateTo(fmt(today)); }
+    else if (preset === "WEEK") {
+      const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
+      setDateFrom(fmt(mon)); setDateTo(fmt(today));
+    } else if (preset === "MONTH") {
+      setDateFrom(fmt(new Date(today.getFullYear(), today.getMonth(), 1))); setDateTo(fmt(today));
+    } else if (preset === "LAST30") {
+      const d = new Date(today); d.setDate(d.getDate() - 30);
+      setDateFrom(fmt(d)); setDateTo(fmt(today));
+    } else { setDateFrom(""); setDateTo(""); }
+  }
 
   function saveTrades(updated) {
     setTrades(updated);
@@ -682,8 +701,10 @@ export default function TradingJournal() {
       const signals = t.signals || t.tags?.filter(tag => Object.values(SIGNAL_TAGS).flat().includes(tag)) || [];
       if (!signals.includes(filterSetup)) return false;
     }
+    if (dateFrom && t.date < dateFrom) return false;
+    if (dateTo && t.date > dateTo) return false;
     return true;
-  }), [trades, filterInstrument, filterSetup]);
+  }), [trades, filterInstrument, filterSetup, dateFrom, dateTo]);
 
   const stats = useMemo(() => {
     const total = filtered.reduce((s, t) => s + t.pnl, 0);
@@ -741,6 +762,28 @@ export default function TradingJournal() {
 
         {activeTab === "dashboard" && (
           <>
+            {/* Date range filter bar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+              {[["ALL", "All Time"], ["TODAY", "Today"], ["WEEK", "This Week"], ["MONTH", "This Month"], ["LAST30", "Last 30 Days"]].map(([key, label]) => (
+                <button key={key} onClick={() => applyPreset(key)} style={{
+                  padding: "6px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer",
+                  fontSize: 11, fontFamily: "'Space Mono', monospace",
+                  borderColor: datePreset === key ? "#388bfd" : "#30363d",
+                  background: datePreset === key ? "rgba(56,139,253,0.15)" : "transparent",
+                  color: datePreset === key ? "#58a6ff" : "#8b949e",
+                }}>{label}</button>
+              ))}
+              <div style={{ width: 1, height: 20, background: "#21262d", margin: "0 4px" }} />
+              <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDatePreset("CUSTOM"); }}
+                style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3", padding: "5px 10px", fontSize: 11, fontFamily: "'Space Mono', monospace", outline: "none", colorScheme: "dark" }} />
+              <span style={{ color: "#484f58", fontSize: 11, fontFamily: "'Space Mono', monospace" }}>→</span>
+              <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setDatePreset("CUSTOM"); }}
+                style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3", padding: "5px 10px", fontSize: 11, fontFamily: "'Space Mono', monospace", outline: "none", colorScheme: "dark" }} />
+              {(dateFrom || dateTo) && (
+                <button onClick={() => applyPreset("ALL")} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #30363d", background: "transparent", color: "#8b949e", cursor: "pointer", fontSize: 11, fontFamily: "'Space Mono', monospace" }}>✕ Clear</button>
+              )}
+              <span style={{ marginLeft: "auto", fontFamily: "'Space Mono', monospace", fontSize: 12, color: "#484f58" }}>{filtered.length} trades</span>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 28 }}>
               <StatCard label="Net P&L" value={formatCurrencyFull(stats.total)} color={stats.total >= 0 ? "#3fb950" : "#f85149"} sub={`${stats.total_trades} trades`} />
               <StatCard label="Win Rate" value={`${stats.winRate.toFixed(1)}%`} color={stats.winRate >= 50 ? "#3fb950" : "#f85149"} sub={`${stats.wins}W · ${stats.losses}L · ${stats.bes}BE`} />
